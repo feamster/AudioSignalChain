@@ -93,7 +93,7 @@ def apply_highpass_filter(audio, cutoff_freq, sample_rate):
                         channels=audio.channels)
 
 
-def record_audio(output_file, record_seconds=5, sample_rate=44100, channels=1):
+def record_audio(output_file: object, record_seconds: object = 5, sample_rate: object = 44100, channels: object = 1) -> None:
     # Find the Scarlett Focusrite device index
     device_index = None
     devices = sd.query_devices()
@@ -119,11 +119,49 @@ def record_audio(output_file, record_seconds=5, sample_rate=44100, channels=1):
         wf.writeframes(audio_data.tobytes())
 
 
+def calculate_record_seconds(num_bars, tempo_bpm, playback_speed, num_loops):
+    """
+    Calculate required recording duration to achieve desired bars after processing.
+
+    Args:
+        num_bars (int): Number of bars desired in final output
+        tempo_bpm (float): Tempo in beats per minute
+        playback_speed (float): Speed multiplier (e.g., 1.25 for 25% faster)
+        num_loops (int): Number of times the audio will be looped
+
+    Returns:
+        float: Required recording duration in seconds
+    """
+    seconds_per_beat = 60.0 / tempo_bpm
+    seconds_per_bar = seconds_per_beat * 4  # Assuming 4/4 time signature
+    final_duration = num_bars * seconds_per_bar
+
+    # Work backwards through the processing chain
+    duration_before_loops = final_duration / num_loops
+    record_duration = duration_before_loops * playback_speed
+
+    return record_duration
+
 def main():
+
+    # Parameters for timing calculation
+    num_bars = 16
+    target_tempo_bpm = 120
+    playback_speed: float = 1.25
+    num_loops = 4
+
+    # Calculate required recording duration
+    record_seconds = calculate_record_seconds(
+        num_bars=num_bars,
+        target_tempo_bpm=target_tempo_bpm,
+        playback_speed=playback_speed,
+        num_loops=num_loops
+    )
+
     # Record audio from Scarlett Focusrite
     input_file = "input.wav"
     output_file = "output.wav"
-    record_seconds = 10
+
     record_audio(input_file, record_seconds)
 
     # Load the recorded audio file
@@ -144,7 +182,7 @@ def main():
     )
 
     # Apply speedup effect
-    sped_up_audio = speedup(audio_with_effects, playback_speed=1.25)
+    sped_up_audio = speedup(audio_with_effects, playback_speed)
     reversed_audio = sped_up_audio.reverse()
 
     # Apply highpass filter
