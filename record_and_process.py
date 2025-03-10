@@ -1,9 +1,11 @@
 import sounddevice as sd
 import numpy as np
 import wave
+
+from pedalboard_native import Compressor, Bitcrush
 from pydub import AudioSegment
 from pydub.effects import normalize, speedup
-from pedalboard import Pedalboard, Reverb, Delay, Chorus
+from pedalboard import Pedalboard, Reverb, Delay, Chorus, Phaser
 import librosa
 import scipy.signal as signal
 
@@ -23,7 +25,12 @@ def add_effects(audio_data, sample_rate):
 
     # Create and apply effects
     board = Pedalboard([
-        Reverb(room_size=0.3, wet_level=0.2)
+        Reverb(room_size=0.3, wet_level=0.2),
+        Delay(delay_seconds=0.25),
+        Chorus(rate_hz=0.5, depth=0.5, centre_delay_ms=7.0, feedback=0.5, mix=0.5),
+        Compressor(),
+        Phaser(rate_hz=0.5, depth=0.5, centre_frequency_hz=1300.0, feedback=0.5, mix=0.5),
+        #Bitcrush(bit_depth=8)
     ])
 
     # Process audio through effects
@@ -116,7 +123,7 @@ def main():
     # Record audio from Scarlett Focusrite
     input_file = "input.wav"
     output_file = "output.wav"
-    record_seconds = 15
+    record_seconds = 10
     record_audio(input_file, record_seconds)
 
     # Load the recorded audio file
