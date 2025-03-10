@@ -146,14 +146,14 @@ def main():
 
     # Parameters for timing calculation
     num_bars = 16
-    target_tempo_bpm = 120
+    target_tempo = 120
     playback_speed: float = 1.25
     num_loops = 4
 
     # Calculate required recording duration
     record_seconds = calculate_record_seconds(
         num_bars=num_bars,
-        target_tempo_bpm=target_tempo_bpm,
+        tempo_bpm=target_tempo,
         playback_speed=playback_speed,
         num_loops=num_loops
     )
