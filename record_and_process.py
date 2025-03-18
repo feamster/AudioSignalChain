@@ -1,6 +1,9 @@
 import sounddevice as sd
+import soundfile as sf
+import threading
 import numpy as np
 import wave
+import time
 
 from pedalboard_native import Compressor, Bitcrush
 from pydub import AudioSegment
@@ -51,7 +54,7 @@ def add_effects_from_file(audio_path):
     return add_effects(audio_data, audio_data.frame_rate)
 
 
-def create_loop(audio_data, num_loops=4):
+def create_loop(audio_data, num_loops=1):
     samples = np.array(audio_data.get_array_of_samples())
 
     if audio_data.sample_width == 2:
@@ -91,6 +94,51 @@ def apply_highpass_filter(audio, cutoff_freq, sample_rate):
     filtered_audio = signal.lfilter(b, a, np.array(audio.get_array_of_samples()))
     return AudioSegment(data=filtered_audio.tobytes(), sample_width=audio.sample_width, frame_rate=audio.frame_rate,
                         channels=audio.channels)
+
+
+def metronome_click(bpm, recording_duration):
+    """
+    Play metronome clicks at a given BPM for the duration of the recording.
+
+    :param bpm: Beats per minute (integer).
+    :param recording_duration: Total duration to keep the metronome active, in seconds.
+    """
+    # Calculate interval between each beat (seconds)
+    beat_interval = 60.0 / bpm
+
+
+    # Keep playing the click sound for the duration of the recording
+    end_time = time.time() + recording_duration
+    while time.time() < end_time:
+        try:
+            # Read the .wav file
+            data, sample_rate = sf.read("metronome_click.wav", dtype='float32')
+            # Play the audio
+            sd.play(data, samplerate=sample_rate)
+            time.sleep(beat_interval)  # Wait for the next beat
+            sd.wait()  # Wait for playback to finish
+        except Exception as e:
+            print(f"Error: {e}")
+
+def record_with_metronome(audio_file, bpm, record_seconds):
+    """
+    Record audio while playing a metronome click.
+
+    :param output_file: Path to save the recorded audio.
+    :param bpm: Target tempo in beats per minute.
+    :param record_seconds: Duration of the recording in seconds.
+    """
+    # Start metronome in a separate thread
+    metronome_thread = threading.Thread(target=metronome_click, args=(bpm, record_seconds))
+    metronome_thread.start()
+
+    # Start audio recording (assuming record_audio is implemented in the current file)
+    # Note: Keep your record_audio implementation
+    record_audio(audio_file, record_seconds)
+
+    # Wait for the metronome to finish
+    metronome_thread.join()
+
 
 
 def record_audio(output_file: object, record_seconds: object = 5, sample_rate: object = 44100, channels: object = 1) -> None:
@@ -145,10 +193,10 @@ def calculate_record_seconds(num_bars, tempo_bpm, playback_speed, num_loops):
 def main():
 
     # Parameters for timing calculation
-    num_bars = 16
+    num_bars = 4
     target_tempo = 120
     playback_speed: float = 1.25
-    num_loops = 4
+    num_loops = 1
 
     # Calculate required recording duration
     record_seconds = calculate_record_seconds(
@@ -159,13 +207,13 @@ def main():
     )
 
     # Record audio from Scarlett Focusrite
-    input_file = "input.wav"
+    record_file = "input.wav"
     output_file = "output.wav"
 
-    record_audio(input_file, record_seconds)
+    record_audio(record_file, record_seconds)
 
     # Load the recorded audio file
-    audio = AudioSegment.from_wav(input_file)
+    audio = AudioSegment.from_wav(record_file)
 
     # Apply normalization
     normalized_audio = normalize(audio)
@@ -192,7 +240,7 @@ def main():
 
     # Create a loop
     # looped_audio, sr = create_loop(input_file)
-    looped_audio = create_loop(reversed_audio, 4)
+    looped_audio = create_loop(reversed_audio, num_loops)
 
     # Export the processed audio to a new file
     looped_audio.export(output_file, format="wav")
