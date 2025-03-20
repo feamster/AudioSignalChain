@@ -2,8 +2,7 @@ import os
 import sounddevice as sd
 import numpy as np
 import wave
-from typing import Tuple
-
+from typing import Tuple  # Added this import
 
 from pedalboard_native import Compressor, Bitcrush
 from pydub import AudioSegment
@@ -12,13 +11,11 @@ from pedalboard import Pedalboard, Reverb, Delay, Chorus, Phaser
 import librosa
 import scipy.signal as signal
 
-
 # Constants
 AUDIO_DIR = "audio"
 DEFAULT_SAMPLE_RATE = 44100
 DEFAULT_CHANNELS = 1
 DEFAULT_SAMPLE_WIDTH = 2
-
 
 # Import the metronome functions from the new file
 from metronome import record_with_metronome
@@ -158,14 +155,78 @@ def calculate_record_seconds(num_bars, tempo_bpm, playback_speed, num_loops):
     return record_duration
 
 
+def ensure_directory_exists(directory_path: str) -> None:
+    """Create directory if it doesn't exist."""
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
+
+
+def setup_audio_paths() -> Tuple[str, str]:
+    """Set up the input and output audio file paths."""
+    ensure_directory_exists(AUDIO_DIR)
+    input_path = os.path.join(AUDIO_DIR, "input.wav")
+    output_path = os.path.join(AUDIO_DIR, "output.wav")
+    return input_path, output_path
+
+
+def process_audio(
+        input_file: str,
+        output_file: str,
+        playback_speed: float,
+        num_loops: int,
+        cutoff_freq: float = 1000.0
+) -> None:
+    """Process audio with a chain of effects."""
+    # Load the recorded audio
+    audio = AudioSegment.from_wav(input_file)
+    sample_rate = audio.frame_rate
+
+    # Apply processing chain
+    audio = normalize(audio)
+
+    # Add effects and convert back to AudioSegment
+    audio_with_effects, sr = add_effects(audio, sample_rate=sample_rate)
+    audio = AudioSegment(
+        audio_with_effects.tobytes(),
+        frame_rate=sr,
+        sample_width=DEFAULT_SAMPLE_WIDTH,
+        channels=DEFAULT_CHANNELS
+    )
+
+    # Apply speed and direction changes
+
+    if (playback_speed > 1):
+        audio = speedup(audio, playback_speed)
+
+    # Reverse the audio
+    audio = audio.reverse()
+
+    # Apply filter and create loop
+    #audio = apply_highpass_filter(audio, cutoff_freq, sample_rate)
+    audio = create_loop(audio, num_loops)
+
+    # Export the processed audio
+    audio.export(output_file, format="wav")
+    print(f"Processed audio saved to {output_file}")
+
+
+def play_audio_file(file_path: str) -> None:
+    """Play an audio file and wait for it to finish."""
+    print(f"Playing audio from {file_path}...")
+    audio_data, sample_rate = librosa.load(file_path)
+    sd.play(audio_data, sample_rate)
+    sd.wait()
+
+
 def main():
-    # Parameters for timing calculation
+    # Configuration parameters
     num_bars = 4
     target_tempo = 120
-    playback_speed: float = 1.25
+    playback_speed = 1.0
     num_loops = 1
+    cutoff_freq = 1000.0
 
-    # Calculate required recording duration
+    # Calculate recording duration
     record_seconds = calculate_record_seconds(
         num_bars=num_bars,
         tempo_bpm=target_tempo,
@@ -173,58 +234,15 @@ def main():
         num_loops=num_loops
     )
 
-    # Record audio from Scarlett Focusrite
+    # Setup input and output paths
+    input_file, output_file = setup_audio_paths()
 
-    audio_dir = "audio"
-    if not os.path.exists(audio_dir):
-        os.makedirs(audio_dir)
-    record_file = os.path.join(audio_dir, "input.wav")
-    output_file = os.path.join(audio_dir, "output.wav")
+    # Record audio
+    record_audio(input_file, record_seconds)
 
-
-    # Use the imported record_with_metronome function
-    #record_with_metronome(record_file, target_tempo, record_seconds, record_audio)
-    record_audio(record_file, record_seconds)
-
-    # Load the recorded audio file
-    audio = AudioSegment.from_wav(record_file)
-
-    # Apply normalization
-    normalized_audio = normalize(audio)
-
-    # Add effects using the file-based function
-    audio_with_effects, sr = add_effects(audio, sample_rate=normalized_audio.frame_rate)
-
-    # Convert back to AudioSegment for further processing
-    audio_with_effects = AudioSegment(
-        audio_with_effects.tobytes(),
-        frame_rate=sr,
-        sample_width=2,
-        channels=1
-    )
-
-    # Apply speedup effect
-    sped_up_audio = speedup(audio_with_effects, playback_speed)
-    reversed_audio = sped_up_audio.reverse()
-
-    # Apply highpass filter
-    sample_rate = audio.frame_rate
-    cutoff_freq = 1000.0
-    filtered_audio = apply_highpass_filter(sped_up_audio, cutoff_freq, sample_rate)
-
-    # Create a loop
-    # looped_audio, sr = create_loop(input_file)
-    looped_audio = create_loop(reversed_audio, num_loops)
-
-    # Export the processed audio to a new file
-    looped_audio.export(output_file, format="wav")
-    print(f"Processed audio saved to {output_file}")
-
-    # Play the processed audio
-    print("Playing processed audio...")
-    processed_audio, sr = librosa.load(output_file)
-    sd.play(processed_audio, sr)
-    sd.wait()
+    # Process and play the audio
+    process_audio(input_file, output_file, playback_speed, num_loops, cutoff_freq)
+    play_audio_file(output_file)
 
 
 if __name__ == "__main__":
