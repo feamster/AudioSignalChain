@@ -1,0 +1,7 @@
+# requirements.txt
+pedalboard>=0.7.0
+gradio>=3.50.0
+numpy>=1.22.0
+sounddevice>=0.4.5
+soundfile>=0.12.1
+matplotlib>=3.6.0
